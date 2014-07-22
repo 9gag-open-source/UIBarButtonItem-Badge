@@ -10,7 +10,13 @@
 
 @interface UIBarButtonItem (Badge)
 
+@property (strong, nonatomic) UIView *badgeBaseView;
 @property (strong, nonatomic) UILabel *badge;
+
+// Badge border width
+@property (nonatomic) NSInteger badgeBorderWidth;
+// Badge border color
+@property (nonatomic) UIColor *badgeBorderColor;
 
 // Badge value to be display
 @property (nonatomic) NSString *badgeValue;

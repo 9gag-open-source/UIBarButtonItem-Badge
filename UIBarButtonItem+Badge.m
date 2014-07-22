@@ -9,6 +9,7 @@
 #import "UIBarButtonItem+Badge.h"
 
 NSString const *badgeKey = @"badgeKey";
+NSString const *badgeBaseViewKey = @"badgeBaseViewKey";
 
 NSString const *badgeBGColorKey = @"badgeBGColorKey";
 NSString const *badgeTextColorKey = @"badgeTextColorKey";
@@ -20,6 +21,8 @@ NSString const *badgeOriginYKey = @"badgeOriginYKey";
 NSString const *shouldHideBadgeAtZeroKey = @"shouldHideBadgeAtZeroKey";
 NSString const *shouldAnimateBadgeKey = @"shouldAnimateBadgeKey";
 NSString const *badgeValueKey = @"badgeValueKey";
+NSString const *badgeBorderWidthKey = @"badgeBorderWidthKey";
+NSString const *badgeBorderColorKey = @"badgeBorderColorKey";
 
 @implementation UIBarButtonItem (Badge)
 
@@ -29,6 +32,9 @@ NSString const *badgeValueKey = @"badgeValueKey";
 
 - (void)badgeInit
 {
+    if(self.badgeBGColor) {
+        return;
+    }
     // Default design initialization
     self.badgeBGColor   = [UIColor redColor];
     self.badgeTextColor = [UIColor whiteColor];
@@ -37,6 +43,8 @@ NSString const *badgeValueKey = @"badgeValueKey";
     self.badgeMinSize   = 8;
     self.badgeOriginX   = self.customView.frame.size.width - self.badge.frame.size.width/2;
     self.badgeOriginY   = -4;
+    self.badgeBorderColor = [UIColor clearColor];
+    self.badgeBorderWidth = 0.0;
     self.shouldHideBadgeAtZero = YES;
     self.shouldAnimateBadge = YES;
     // Avoids badge to be clipped when animating its scale
@@ -50,8 +58,13 @@ NSString const *badgeValueKey = @"badgeValueKey";
 {
     // Change new attributes
     self.badge.textColor        = self.badgeTextColor;
-    self.badge.backgroundColor  = self.badgeBGColor;
+    self.badge.backgroundColor  = [UIColor clearColor];
     self.badge.font             = self.badgeFont;
+    self.badgeBaseView.layer.borderColor = self.badgeBorderColor.CGColor;
+    self.badgeBaseView.layer.borderWidth = self.badgeBorderWidth;
+    
+    UIView *bgView = [self.badgeBaseView viewWithTag:1234];
+    bgView.backgroundColor = self.badgeBGColor;
 }
 
 - (CGSize) badgeExpectedSize
@@ -82,9 +95,13 @@ NSString const *badgeValueKey = @"badgeValueKey";
     
     // Using const we make sure the badge doesn't get too smal
     minWidth = (minWidth < minHeight) ? minHeight : expectedLabelSize.width;
-    self.badge.frame = CGRectMake(self.badgeOriginX, self.badgeOriginY, minWidth + padding, minHeight + padding);
-    self.badge.layer.cornerRadius = (minHeight + padding) / 2;
-    self.badge.layer.masksToBounds = YES;
+    self.badgeBaseView.frame = CGRectMake(self.badgeOriginX, self.badgeOriginY, minWidth + padding, minHeight + padding);
+    self.badgeBaseView.layer.cornerRadius = (minHeight + padding) / 2;
+    self.badgeBaseView.layer.masksToBounds = YES;
+    
+    UIView *bgView = [self.badgeBaseView viewWithTag:1234];
+    bgView.layer.cornerRadius = self.badgeBaseView.layer.cornerRadius-2;
+    bgView.layer.masksToBounds = YES;
 }
 
 // Handle the badge changing value
@@ -97,7 +114,7 @@ NSString const *badgeValueKey = @"badgeValueKey";
         [animation setToValue:[NSNumber numberWithFloat:1]];
         [animation setDuration:0.2];
         [animation setTimingFunction:[CAMediaTimingFunction functionWithControlPoints:.4f :1.3f :1.f :1.f]];
-        [self.badge.layer addAnimation:animation forKey:@"bounceAnimation"];
+        [self.badgeBaseView.layer addAnimation:animation forKey:@"bounceAnimation"];
     }
     
     // Set the new value
@@ -123,10 +140,12 @@ NSString const *badgeValueKey = @"badgeValueKey";
 {
     // Animate badge removal
     [UIView animateWithDuration:0.2 animations:^{
-        self.badge.transform = CGAffineTransformMakeScale(0, 0);
+        self.badgeBaseView.transform = CGAffineTransformMakeScale(0, 0);
     } completion:^(BOOL finished) {
         [self.badge removeFromSuperview];
         self.badge = nil;
+        [self.badgeBaseView removeFromSuperview];
+        self.badgeBaseView = nil;
     }];
 }
 
@@ -137,6 +156,13 @@ NSString const *badgeValueKey = @"badgeValueKey";
 -(void)setBadge:(UILabel *)badgeLabel
 {
     objc_setAssociatedObject(self, &badgeKey, badgeLabel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+-(UIView*) badgeBaseView {
+    return objc_getAssociatedObject(self, &badgeBaseViewKey);
+}
+-(void)setBadgeBaseView:(UIView *)badgeBaseView
+{
+    objc_setAssociatedObject(self, &badgeBaseViewKey, badgeBaseView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 // Badge value to be display
@@ -150,18 +176,59 @@ NSString const *badgeValueKey = @"badgeValueKey";
     // When changing the badge value check if we need to remove the badge
     if (!badgeValue || [badgeValue isEqualToString:@""] || ([badgeValue isEqualToString:@"0"] && self.shouldHideBadgeAtZero)) {
         [self removeBadge];
-    } else if (!self.badge) {
+    } else if (!self.badgeBaseView) {
         // Create a new badge because not existing
-        self.badge                      = [[UILabel alloc] initWithFrame:CGRectMake(self.badgeOriginX, self.badgeOriginY, 20, 20)];
+        
+        self.badgeBaseView = [[UIView alloc] initWithFrame:CGRectMake(self.badgeOriginX, self.badgeOriginY, 20, 20)];
+        self.badgeBaseView.backgroundColor = [UIColor clearColor];
+        
+        UIView *bgView = [[UIView alloc] initWithFrame:CGRectMake(1,1,18,18)];
+        bgView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        bgView.tag = 1234;
+        bgView.backgroundColor = self.badgeBGColor;
+        [self.badgeBaseView addSubview:bgView];
+        
+        self.badge = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 20, 20)];
+        self.badge.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        [self.badgeBaseView addSubview:self.badge];
+        
         self.badge.textColor            = self.badgeTextColor;
-        self.badge.backgroundColor      = self.badgeBGColor;
+        self.badge.backgroundColor      = [UIColor clearColor];
         self.badge.font                 = self.badgeFont;
+        self.badgeBaseView.layer.borderWidth    = self.badgeBorderWidth;
+        self.badgeBaseView.layer.borderColor    = self.badgeBorderColor.CGColor;
         self.badge.textAlignment        = NSTextAlignmentCenter;
         [self badgeInit];
-        [self.customView addSubview:self.badge];
+        [self.customView addSubview:self.badgeBaseView];
         [self updateBadgeValueAnimated:NO];
     } else {
         [self updateBadgeValueAnimated:YES];
+    }
+}
+
+// Badge border color
+-(UIColor *)badgeBorderColor {
+    return objc_getAssociatedObject(self, &badgeBorderColorKey);
+}
+-(void)setBadgeBorderColor:(UIColor *)badgeBorderColor
+{
+    objc_setAssociatedObject(self, &badgeBorderColorKey, badgeBorderColor, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (self.badge) {
+        [self refreshBadge];
+    }
+}
+
+// Minimum size badge to small
+-(NSInteger) badgeBorderWidth {
+    NSNumber *number = objc_getAssociatedObject(self, &badgeBorderWidthKey);
+    return number.integerValue;
+}
+-(void) setBadgeBorderWidth:(NSInteger)badgeBorderWidth
+{
+    NSNumber *number = [NSNumber numberWithInteger:badgeBorderWidth];
+    objc_setAssociatedObject(self, &badgeBorderWidthKey, number, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (self.badge) {
+        [self refreshBadge];
     }
 }
 
